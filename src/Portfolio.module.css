@@ -1,0 +1,53 @@
+.canvas {
+  position: relative;
+  display: flex;
+  min-height: 100svh;
+  align-items: center;
+  overflow: hidden;
+  padding: clamp(28px, 8vw, 120px);
+  background: #eae9e4;
+  color: #151515;
+  transition: background-color 240ms ease, color 240ms ease;
+}
+
+.canvas[data-theme='dark'] {
+  background: #11110f;
+  color: #ededdf;
+}
+
+.name {
+  margin: 0 0 0 -0.065em;
+  font: 600 clamp(76px, 18vw, 260px)/0.78 'Space Grotesk', sans-serif;
+  letter-spacing: -0.09em;
+}
+
+.name span { color: #ff5b35; }
+.canvas[data-theme='dark'] .name span { color: #c9f31d; }
+
+.themeToggle {
+  position: absolute;
+  top: clamp(20px, 4vw, 48px);
+  right: clamp(20px, 4vw, 48px);
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: 24px/1 sans-serif;
+}
+
+.themeToggle:hover { transform: rotate(-12deg); }
+.themeToggle:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+
+@media (max-width: 520px) {
+  .name { font-size: clamp(74px, 20vw, 120px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas { transition: none; }
+  .themeToggle:hover { transform: none; }
+}
