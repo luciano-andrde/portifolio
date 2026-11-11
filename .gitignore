@@ -26,3 +26,6 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 .idea/
+
+# Modelo original mantido localmente; o site usa a versão otimizada
+/public/models/nintendo_game_boy_original_1989.glb

@@ -1,33 +1,27 @@
 import { expect, test } from '@playwright/test'
 
-test('apresenta apenas o nome e permite alternar os dois temas no desktop', async ({ page }, testInfo) => {
-  const pageErrors: string[] = []
-  page.on('pageerror', error => pageErrors.push(error.message))
-  await page.setViewportSize({ width: 1440, height: 1000 })
+test('permite escolher uma seção após a intro e guarda a preferência de tema', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/')
-
-  await expect(page).toHaveTitle(/Luciano Andrade/)
-  await expect(page.getByRole('heading', { name: /Luciano Andrade/ })).toBeVisible()
-  await expect(page.getByRole('heading')).toHaveCount(1)
-  await expect(page.locator('main')).toHaveAttribute('data-theme', 'light')
+  await expect(page.getByRole('listbox', { name: 'Escolha uma seção' })).toBeVisible()
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/#sobre/)
+  await expect(page.getByRole('heading', { name: /Prazer/ })).toBeVisible()
   await page.getByRole('button', { name: 'Ativar tema escuro' }).click()
   await expect(page.locator('main')).toHaveAttribute('data-theme', 'dark')
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440)
-  expect(pageErrors).toEqual([])
-  await page.screenshot({ path: testInfo.outputPath('desktop.png'), fullPage: true })
-})
-
-test('apresenta apenas o nome e mantém o toggle utilizável no mobile', async ({ page }, testInfo) => {
-  const pageErrors: string[] = []
-  page.on('pageerror', error => pageErrors.push(error.message))
-  await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/')
-
-  await expect(page.getByRole('heading', { name: /Luciano Andrade/ })).toBeVisible()
-  await expect(page.getByRole('heading')).toHaveCount(1)
-  await page.getByRole('button', { name: 'Ativar tema escuro' }).click()
+  await page.reload()
   await expect(page.locator('main')).toHaveAttribute('data-theme', 'dark')
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
-  expect(pageErrors).toEqual([])
-  await page.screenshot({ path: testInfo.outputPath('mobile.png'), fullPage: true })
+  await expect(page.getByRole('heading', { name: /Prazer/ })).toBeVisible()
 })
+
+for (const width of [360, 768, 1280, 1920]) {
+  test(`mantém a navegação acessível em ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 })
+    await page.goto('/#projetos')
+    await expect(page.getByRole('heading', { name: /Trabalho/ })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
+    await page.getByRole('button', { name: 'VER DETALHES +' }).first().click()
+    await expect(page.getByText('O DESAFIO')).toBeVisible()
+  })
+}
