@@ -3,12 +3,13 @@ import { createPortal, useFrame, useThree } from '@react-three/fiber'
 import { useGLTF, useTexture } from '@react-three/drei'
 import { Box3, CanvasTexture, Color, Group, MathUtils, Mesh, MeshBasicMaterial, MeshStandardMaterial, PerspectiveCamera, Quaternion, SRGBColorSpace, Texture, Vector3 } from 'three'
 import { createThreeDSCard, THREE_DS_CARD_HEIGHT } from './three-ds-card'
-import type { MemoryAnchor } from './memory-card'
+import type { MediaAnchor } from './media-anchor'
 
-export default function ThreeDSScene({ active, progress, cameraDistance, cardAnchor, screenElement, onReady, onIntroReady, exitProgress, onEntered }: { exitProgress: RefObject<number>, onEntered: () => void, active: boolean, progress: RefObject<number>, cameraDistance: RefObject<number>, cardAnchor: RefObject<MemoryAnchor>, screenElement: RefObject<HTMLDivElement | null>, onReady: (ready: boolean) => void, onIntroReady: (ready: boolean) => void }) {
+export default function ThreeDSScene({ active, progress, cameraDistance, cardAnchor, screenElement, onReady, onIntroReady, exitProgress, onEntered }: { exitProgress: RefObject<number>, onEntered: () => void, active: boolean, progress: RefObject<number>, cameraDistance: RefObject<number>, cardAnchor: RefObject<MediaAnchor>, screenElement: RefObject<HTMLDivElement | null>, onReady: (ready: boolean) => void, onIntroReady: (ready: boolean) => void }) {
   const { scene } = useGLTF('/models/andrde-eds-rigged.glb')
   const { scene: cardScene } = useGLTF('/models/cartucho-3ds-otimizado.glb')
   const artwork = useTexture('/images/rotulo-3ds-novo.webp')
+  const cardArtwork = useTexture('/images/rotulo-eds-cartucho.webp')
   const { gl, camera, scene: renderScene } = useThree()
   const consoleGroup = useRef<Group>(null)
   const cardGroup = useRef<Group>(null)
@@ -16,8 +17,10 @@ export default function ThreeDSScene({ active, progress, cameraDistance, cardAnc
   const upperScreen = useRef<Mesh>(null)
   const wasReady = useRef(false)
   const cameraOwned = useRef(false)
+  const previousProgress = useRef(0)
+  const impactTime = useRef(1)
   const reduced = useMemo(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
-  const { model, center, size, upper, base } = useMemo(() => {
+  const { model, center, size, upper, base, insertionAxis } = useMemo(() => {
     const model = scene.clone(true)
     model.updateMatrixWorld(true)
     const bounds = new Box3().setFromObject(model)
@@ -49,9 +52,10 @@ export default function ThreeDSScene({ active, progress, cameraDistance, cardAnc
         child.material = material
       }
     }
-    return { model, center: bounds.getCenter(new Vector3()), size: bounds.getSize(new Vector3()), upper, base }
+    const insertionAxis = new Vector3(0, 0, 1).transformDirection(base.matrixWorld)
+    return { model, center: bounds.getCenter(new Vector3()), size: bounds.getSize(new Vector3()), upper, base, insertionAxis }
   }, [scene])
-  const card = useMemo(() => createThreeDSCard(cardScene, artwork), [cardScene, artwork])
+  const card = useMemo(() => createThreeDSCard(cardScene, cardArtwork, Math.min(8, gl.capabilities.getMaxAnisotropy())), [cardScene, cardArtwork, gl])
   const topTexture = useMemo(() => {
     const canvas = document.createElement('canvas'); canvas.width = 1600; canvas.height = 960
     const context = canvas.getContext('2d')!
@@ -87,11 +91,18 @@ export default function ThreeDSScene({ active, progress, cameraDistance, cardAnc
     if (!consoleGroup.current || !cardGroup.current || !lowerScreen.current || !upperScreen.current) return
     if (!active) {
       consoleGroup.current.visible = false; cardGroup.current.visible = false
+      previousProgress.current = 0
+      impactTime.current = 1
       if (cameraOwned.current) { camera.quaternion.identity(); camera.position.set(0, 0, cameraDistance.current); cameraOwned.current = false }
       return
     }
     cameraOwned.current = true
     const p = progress.current
+    if (p < .66) impactTime.current = 1
+    if (previousProgress.current < .68 && p >= .68) impactTime.current = 0
+    previousProgress.current = p
+    impactTime.current = Math.min(1, impactTime.current + Math.min(delta, .05))
+    const impact = reduced ? 0 : Math.sin(Math.min(1, impactTime.current / .32) * Math.PI) * Math.exp(-impactTime.current * 6)
     const ready = p >= .99
     if (ready !== wasReady.current) { wasReady.current = ready; onIntroReady(ready) }
     const perspective = camera as PerspectiveCamera
@@ -100,13 +111,14 @@ export default function ThreeDSScene({ active, progress, cameraDistance, cardAnc
     const scale = Math.min(5.4, width * .8, height * .7) / size.x
     const reveal = reduced ? (p > 0 ? 1 : 0) : MathUtils.smootherstep(p, .32, .52)
     const align = reduced ? 1 : MathUtils.smootherstep(p, .33, .55)
-    const insert = reduced ? 1 : MathUtils.smootherstep(p, .55, .68)
+    // The last part of the travel catches on the latch before snapping into place.
+    const insert = reduced ? 1 : .88 * MathUtils.smootherstep(p, .55, .645) + .12 * MathUtils.smootherstep(p, .66, .68)
     const open = reduced ? (p > 0 ? 1 : 0) : MathUtils.smootherstep(p, .78, .97)
     upper.rotation.x = (1 - open) * 2.62
     consoleGroup.current.visible = true
     consoleGroup.current.scale.setScalar(scale)
-    consoleGroup.current.position.y = MathUtils.lerp(-height / 2 - size.length() * scale / 2, -.15, reveal)
-    consoleGroup.current.rotation.set(0, 0, 0)
+    consoleGroup.current.position.set(0, MathUtils.lerp(-height / 2 - size.length() * scale / 2, -.15, reveal), 0).addScaledVector(insertionAxis, impact * .075)
+    consoleGroup.current.rotation.set(impact * .012, 0, 0)
     consoleGroup.current.updateWorldMatrix(true, true)
     const anchor = cardAnchor.current
     const cardHeight = MathUtils.lerp(anchor.ready ? anchor.scale.x * THREE_DS_CARD_HEIGHT / 32.2 : 1.2, size.x * scale * .23, align)
@@ -114,7 +126,7 @@ export default function ThreeDSScene({ active, progress, cameraDistance, cardAnc
     cardGroup.current.scale.setScalar(cardHeight)
     scratch.slot.set(0, -2.95, -3).applyMatrix4(base.matrixWorld)
     scratch.direction.set(0, 0, -1).transformDirection(base.matrixWorld)
-    scratch.position.copy(scratch.slot).addScaledVector(scratch.direction, cardHeight * (1.2 - insert * 1.72))
+    scratch.position.copy(scratch.slot).addScaledVector(scratch.direction, cardHeight * (1.2 - insert * 1.72 - impact * .075))
     cardGroup.current.position.set(anchor.ready ? anchor.position.x : 0, anchor.ready ? anchor.position.y : 0, anchor.ready ? anchor.position.z : 0).lerp(scratch.position, align)
     base.getWorldQuaternion(scratch.orientation).multiply(scratch.cardTurn)
     cardGroup.current.quaternion.copy(anchor.ready ? anchor.rotation : scratch.identity).slerp(scratch.orientation, align)
@@ -123,9 +135,12 @@ export default function ThreeDSScene({ active, progress, cameraDistance, cardAnc
     scratch.camera.copy(scratch.direction).multiplyScalar(.48).addScaledVector(scratch.up, .3).normalize()
     scratch.cameraTurn.setFromUnitVectors(scratch.forward, scratch.camera)
     scratch.cameraBlend.copy(scratch.identity).slerp(scratch.cameraTurn, close)
-    scratch.target.set(0, 0, 0).lerp(scratch.slot, close)
-    const distance = MathUtils.lerp(.9, .58, close) + .35 * Math.sin(Math.PI * close)
+    const settle = reduced ? 1 : MathUtils.smootherstep(p, .87, 1)
+    const finalDistance = Math.max(.7, size.x * scale / (width * .91), size.y * scale / (height * .78))
+    scratch.target.set(0, -.15 * settle, 0).lerp(scratch.slot, close)
+    const distance = MathUtils.lerp(MathUtils.lerp(.9, finalDistance, settle), .58, close) + .35 * Math.sin(Math.PI * close)
     camera.position.copy(scratch.forward).applyQuaternion(scratch.cameraBlend).multiplyScalar(cameraDistance.current * distance).add(scratch.target)
+    camera.position.addScaledVector(scratch.up, impact * .018)
     camera.lookAt(scratch.target)
     const lit = MathUtils.smootherstep(p, .93, .99)
     ;(lowerScreen.current.material as MeshBasicMaterial).color.copy(screenOff).lerp(screenOn, lit)

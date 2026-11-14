@@ -4,7 +4,7 @@
 .preview-3d--entering .console-menu{pointer-events:none}
 .preview-stage{position:sticky;top:0;height:100dvh;overflow:hidden;background:radial-gradient(ellipse at 50% 45%,#444743 0%,#282b2a 45%,#121414 100%)}
 .preview-stage::before{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 48%,#1b3047 0%,#151c29 48%,#0e111a 100%);opacity:0;transition:opacity .6s ease-out}
-.preview-stage--ps2::before{opacity:1}
+.preview-stage--psp::before{opacity:1}
 .preview-stage--3ds::before{background:radial-gradient(ellipse at 50% 42%,#5f373b 0%,#382629 48%,#171516 100%);opacity:1}
 .preview-3ds-screen{position:absolute;z-index:3;top:0;left:0;width:560px;height:420px;transform:translate(-9999px,-9999px);transform-origin:0 0;display:flex;flex-direction:column;background:linear-gradient(#f9f8f5,#e2e1dd);color:#514c4b;font:600 20px sans-serif;overflow:hidden}
 .preview-3ds-screen header{display:flex;justify-content:space-between;align-items:center;height:48px;padding:0 24px;color:#8e8985;font-size:17px;letter-spacing:.07em;border-bottom:2px solid #d2cfcb}
@@ -39,20 +39,7 @@
 .preview-carousel .preview-carousel-open{grid-column:1/-1;font:600 11px monospace;letter-spacing:.08em}
 .preview-carousel ~ .preview-credits{bottom:max(78px,calc(env(safe-area-inset-bottom) + 66px))}
 .preview-carousel--reduced ~ .preview-credits{bottom:max(132px,calc(env(safe-area-inset-bottom) + 120px))}
-.preview-ps2-menu{position:absolute;z-index:3;left:50%;bottom:max(36px,calc(env(safe-area-inset-bottom) + 28px));transform:translateX(-50%);display:grid;justify-items:center;gap:18px;width:min(88%,540px);color:#e4edff;text-align:center;animation:ps2-menu-reveal .6s cubic-bezier(.23,1,.32,1) both}
-@keyframes ps2-menu-reveal{from{opacity:0;transform:translate(-50%,18px)}to{opacity:1;transform:translate(-50%,0)}}
-.preview-ps2-menu h1{margin:0;font:400 clamp(22px,3vw,34px)/1.25 'DM Mono',monospace;letter-spacing:-.035em;text-wrap:balance}
-.preview-ps2-menu{top:58%;bottom:auto}
-.ps2-system-name{margin:0;color:#93accf;font:500 10px/1.4 'DM Mono',monospace;letter-spacing:.24em}
-.ps2-system-orbit{position:absolute;z-index:-1;top:-35px;width:240px;height:200px;pointer-events:none;background:radial-gradient(ellipse,#4169ad30,transparent 68%)}
-.preview-ps2-menu button{min-height:44px;color:#e4edff;font:500 12px 'DM Mono',monospace;cursor:pointer}
-.preview-ps2-menu .ps2-save{display:flex;align-items:center;gap:24px;width:min(100%,380px);padding:16px 24px;border:1px solid #799bd284;border-radius:3px;background:linear-gradient(110deg,#243d63cc,#142138dd);box-shadow:inset 2px 0 #b7d6ff,0 8px 35px #07112480;text-align:left;letter-spacing:.04em}
-.ps2-save-icon{position:relative;display:grid;place-items:center;width:34px;height:44px;flex-shrink:0;border:1px solid #646e7d;border-top:4px solid #4d586a;border-radius:3px;background:linear-gradient(135deg,#30394a,#111722)}
-.ps2-save-icon i{padding:2px;background:#ded8c9;color:#354366;font:italic 10px Georgia,serif;transform:rotate(-4deg)}
-.preview-ps2-menu .ps2-back{padding:4px 16px;border:0;background:transparent;color:#a7b7cf;font-size:11px;text-decoration:underline;text-underline-offset:4px}
-.preview-3d--entering .preview-ps2-menu{animation:none;opacity:0;transform:translate(-50%,-8px);pointer-events:none;transition:opacity .4s ease-out,transform .4s ease-out}
-@media(max-height:550px) and (orientation:landscape){.preview-ps2-menu{left:74%;top:auto;bottom:15%;width:44%;gap:8px}.preview-ps2-menu h1{font-size:18px}.preview-ps2-menu .ps2-save{padding:8px 12px;gap:12px}.ps2-system-name{font-size:9px}}
-.preview-ps2-menu button:focus-visible{outline:2px solid #e4edff;outline-offset:3px}
+
 .preview-credits{position:absolute;z-index:4;right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));color:#e7e6de;font:11px/1.5 monospace}
 .preview-credits summary{display:grid;place-items:center;min-height:44px;padding:0 6px;cursor:pointer;list-style:none}
 .preview-credits summary::-webkit-details-marker{display:none}
@@ -88,4 +75,29 @@
   .preview-landscape-menu button:focus-visible{outline:2px solid #e7e6de;outline-offset:3px}
   .preview-landscape-menu ~ .preview-hint{display:none}
 }
-@media(prefers-reduced-motion:reduce){.preview-3d{height:100dvh}.preview-stage::before{transition:none}.preview-carousel-waiting,.preview-ps2-menu{animation:none}}
+@media(prefers-reduced-motion:reduce){.preview-3d{height:100dvh}.preview-stage::before{transition:none}}
+
+.preview-psp-screen{position:absolute;z-index:3;top:0;left:0;width:960px;height:540px;transform:translate(-9999px,-9999px);transform-origin:0 0;overflow:hidden;color:#fff;font-family:Arial,sans-serif;text-shadow:0 2px 5px #061a36;background:linear-gradient(115deg,#132c4b 0%,#315a81 55%,#123759 100%);box-shadow:inset 0 0 24px #0007}
+.psp-wave{position:absolute;left:-12%;right:-12%;top:45%;height:160px;border-top:2px solid #e7f6ff55;border-radius:50% 48% 0 0;transform:rotate(-7deg);background:linear-gradient(180deg,#d7edfa28,transparent 60%);box-shadow:0 -12px 30px #b9e4ff12;pointer-events:none}
+.psp-wave:after{content:'';position:absolute;inset:13px -2% 0;border-top:1px solid #e9f8ff44;border-radius:50% 50% 0 0}
+.psp-status{position:absolute;top:26px;right:35px;display:flex;align-items:center;gap:18px;font-size:16px;letter-spacing:.04em;color:#e1ebf3}
+.psp-battery{font-size:13px;border:2px solid #d9e7ef;border-radius:3px;padding:1px 4px;letter-spacing:-2px}
+.psp-categories{position:absolute;top:88px;left:76px;display:flex;align-items:flex-start;gap:36px;color:#dcebf4}
+.psp-category{display:grid;place-items:center;width:55px;height:55px;font-size:41px;opacity:.48;line-height:1}
+.psp-category--selected{position:relative;opacity:1;filter:drop-shadow(0 0 7px #e0f4ff90)}
+.psp-category svg{width:59px;height:48px}
+.psp-category small{position:absolute;top:61px;font-size:21px;font-weight:400;white-space:nowrap}
+.psp-library{position:absolute;top:228px;left:20px}
+.psp-game{display:flex;align-items:center;gap:24px;min-width:540px;padding:8px;color:inherit;border:0;background:transparent;text-align:left;cursor:pointer;text-shadow:inherit}
+.psp-game img{width:240px;height:136px;object-fit:cover;box-shadow:0 2px 12px #0715269c}
+.psp-game>span{display:flex;flex-direction:column;gap:7px}
+.psp-game strong{font-size:30px;font-weight:400}
+.psp-game small{font-size:19px;color:#dbe9f4}
+.psp-actions{position:absolute;right:34px;bottom:23px;display:flex;align-items:center;gap:25px;font-size:18px;color:#f2f7fb}
+.psp-actions b{font-size:25px;font-weight:400;margin-right:5px}
+.psp-back{color:inherit;background:none;border:0;font:inherit;text-shadow:inherit;cursor:pointer}
+.preview-psp-screen button:focus-visible{outline:3px solid #f4fbff;outline-offset:5px}
+.preview-psp-screen:after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(125deg,#fff1,transparent 40%)}
+.preview-3d--entering .preview-psp-screen{pointer-events:none}
+@media(pointer:coarse){.preview-stage--psp .preview-touch-controls{display:flex}}
+@media(pointer:coarse) and (orientation:landscape) and (max-height:500px){.preview-stage--psp .preview-touch-controls{bottom:max(12px,env(safe-area-inset-bottom))}}

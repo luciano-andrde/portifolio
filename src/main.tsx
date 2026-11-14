@@ -5,7 +5,7 @@ import './styles.css'
 
 const App = lazy(() => import('./PortfolioPlaceholder'))
 const Preview3D = lazy(() => import('./Preview3D'))
-const portfolioSections = ['#projetos', '#sobre', '#trajetoria', '#contato', '#ps2', '#3ds']
+const portfolioSections = ['#projetos', '#sobre', '#trajetoria', '#contato', '#ps2', '#psp', '#3ds']
 const showIntro = window.location.pathname === '/preview' || (window.location.pathname === '/' && !portfolioSections.includes(window.location.hash))
 
 createRoot(document.getElementById('root')!).render(

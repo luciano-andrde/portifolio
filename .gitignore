@@ -14,6 +14,7 @@ coverage/
 /blob-report/
 /.playwright/
 /graphify-out/
+/.codex-attachments/
 
 # Local environment and secrets
 .env
@@ -41,3 +42,6 @@ Thumbs.db
 /public/models/high_detail_ps2_memory_card.glb
 /public/models/nintendo_3ds_xl.glb
 /public/models/3ds_handheld_console.glb
+/public/models/sony_psp.glb
+/public/models/psp_handheld_console.glb
+/assets/model-sources/

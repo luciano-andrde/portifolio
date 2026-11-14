@@ -7,7 +7,7 @@ test('prepara os modelos antes de apresentar o carrossel', async ({ page }) => {
   let releaseModel!: () => void
   const modelReleased = new Promise<void>((resolve) => { releaseModel = resolve })
   let requests = 0
-  await page.route('**/models/playstation-2-otimizado.glb', async (route) => {
+  await page.route('**/models/psp-otimizado.glb', async (route) => {
     requests++
     await modelReleased
     await route.continue()
@@ -23,15 +23,15 @@ test('prepara os modelos antes de apresentar o carrossel', async ({ page }) => {
   }
   await expect(page.getByRole('group', { name: 'Escolher cartucho' })).toBeVisible({ timeout: 60_000 })
   await page.getByRole('button', { name: 'Próximo cartucho' }).click()
-  await expect(page.getByText('ANDRDESTATION 2', { exact: true })).toBeVisible()
-  await expect(page.locator('.loading-skeleton--ps2')).toBeHidden()
+  await expect(page.getByText('ANDRDE PSP', { exact: true })).toBeVisible()
+  await expect(page.locator('.loading-skeleton--psp')).toBeHidden()
   expect(requests).toBe(1)
   await page.getByRole('button', { name: 'ABRIR', exact: true }).click()
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
-  await expect(page.getByRole('button', { name: 'ABRIR PORTFÓLIO →' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('button', { name: 'Abrir portfólio' })).toBeVisible({ timeout: 30_000 })
 })
 
-test('mantém o fluxo do Game Boy após preparar o PS2', async ({ page }) => {
+test('mantém o fluxo do Game Boy após preparar o PSP', async ({ page }) => {
   test.setTimeout(90_000)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/')

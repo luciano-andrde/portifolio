@@ -2,22 +2,26 @@ import { Component, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useSt
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { ContactShadows, Environment, Lightformer, useGLTF, useTexture } from '@react-three/drei'
 import { Box3, CanvasTexture, Color, Group, Material, MathUtils, Mesh, MeshStandardMaterial, Object3D, PerspectiveCamera, Quaternion, ShaderChunk, SRGBColorSpace, Texture, Vector3 } from 'three'
-import PlayStationScene from './PlayStationScene'
+import PSPScene from './PSPScene'
 import ThreeDSScene from './ThreeDSScene'
 import LoadingSkeleton from './LoadingSkeleton'
 import PortfolioPlaceholder from './PortfolioPlaceholder'
-import { createMemoryCard, MEMORY_DISPLAY_HEIGHT, type MemoryAnchor } from './memory-card'
+import { createUMD, UMD_DISPLAY_HEIGHT } from './umd'
+import type { MediaAnchor } from './media-anchor'
 import { createThreeDSCard, THREE_DS_CARD_HEIGHT } from './three-ds-card'
 import './preview-3d.css'
 
 const debug = new URLSearchParams(window.location.search).get('debug') === '1'
 useGLTF.preload('/models/console-otimizado.glb')
-useGLTF.preload('/models/memory-card-otimizado.glb')
-useGLTF.preload('/models/playstation-2-otimizado.glb')
+useGLTF.preload('/models/umd-otimizado.glb')
+useGLTF.preload('/models/psp-otimizado.glb')
 useGLTF.preload('/models/andrde-eds-rigged.glb')
 useGLTF.preload('/models/cartucho-3ds-otimizado.glb')
+useTexture.preload('/images/psp-urban-umd-v2.webp')
+useTexture.preload('/images/psp-urban-screen-v2.webp')
 useTexture.preload('/images/rotulo-andrde.png')
 useTexture.preload('/images/rotulo-3ds-novo.webp')
+useTexture.preload('/images/rotulo-eds-cartucho.webp')
 const sections = [{ id: 'projetos', label: 'ABRIR PORTFÓLIO' }]
 type Control = 'up' | 'down' | 'left' | 'right' | 'a' | 'b' | 'start' | 'select'
 
@@ -51,13 +55,14 @@ function WebGLFallback() {
   return <div className="preview-error">WebGL não está disponível. <a href="/#projetos">Abrir portfólio</a></div>
 }
 
-function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, controlsReady, cartridgeChoice, onCartridgeChoice, carouselVisible, memoryAnchor, motionProgress, soundPreference, progress, screenElement, cameraDistance, exitProgress, onEntered }: { cameraDistance: RefObject<number>, exitProgress: RefObject<number>, onEntered: () => void, onHover: (name: string) => void, onReady: (ready: boolean) => void, onIntroReady: (ready: boolean) => void, onSoundReady: (ready: boolean) => void, onControl: (control: Control) => void, controlsReady: boolean, cartridgeChoice: number, onCartridgeChoice: (choice: number) => void, carouselVisible: boolean, memoryAnchor: RefObject<MemoryAnchor>, motionProgress: RefObject<number>, soundPreference: RefObject<boolean>, progress: RefObject<number>, screenElement: RefObject<HTMLDivElement | null> }) {
+function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, controlsReady, cartridgeChoice, onCartridgeChoice, carouselVisible, mediaAnchor, motionProgress, soundPreference, progress, screenElement, cameraDistance, exitProgress, onEntered }: { cameraDistance: RefObject<number>, exitProgress: RefObject<number>, onEntered: () => void, onHover: (name: string) => void, onReady: (ready: boolean) => void, onIntroReady: (ready: boolean) => void, onSoundReady: (ready: boolean) => void, onControl: (control: Control) => void, controlsReady: boolean, cartridgeChoice: number, onCartridgeChoice: (choice: number) => void, carouselVisible: boolean, mediaAnchor: RefObject<MediaAnchor>, motionProgress: RefObject<number>, soundPreference: RefObject<boolean>, progress: RefObject<number>, screenElement: RefObject<HTMLDivElement | null> }) {
   const { scene } = useGLTF('/models/console-otimizado.glb')
-  const { scene: memoryScene } = useGLTF('/models/memory-card-otimizado.glb')
+  const { scene: umdScene } = useGLTF('/models/umd-otimizado.glb')
   const { scene: threeDSCardScene } = useGLTF('/models/cartucho-3ds-otimizado.glb')
   const { gl, camera, scene: renderScene } = useThree()
+  const umdArt = useTexture('/images/psp-urban-umd-v2.webp')
   const cartridgeArt = useTexture('/images/rotulo-andrde.png')
-  const threeDSArt = useTexture('/images/rotulo-3ds-novo.webp')
+  const threeDSArt = useTexture('/images/rotulo-eds-cartucho.webp')
   cartridgeArt.colorSpace = SRGBColorSpace
   const group = useRef<Group>(null)
   const bootTime = useRef<number | null>(null)
@@ -316,8 +321,8 @@ function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, cont
         const memory = new Group()
         memory.name = 'carousel_1'
         memory.position.copy(cartridgePivot.position)
-        const content = createMemoryCard(memoryScene)
-        content.scale.multiplyScalar(MEMORY_DISPLAY_HEIGHT / 32.2)
+        const content = createUMD(umdScene, umdArt, Math.min(8, gl.capabilities.getMaxAnisotropy()))
+        content.scale.multiplyScalar(UMD_DISPLAY_HEIGHT / 32.2)
         memory.add(content)
         model.add(memory)
         cartridges.push(memory)
@@ -326,7 +331,7 @@ function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, cont
       const cartridge = new Group()
       cartridge.name = 'carousel_2'
       cartridge.position.copy(cartridgePivot.position)
-      const content = createThreeDSCard(threeDSCardScene, threeDSArt)
+      const content = createThreeDSCard(threeDSCardScene, threeDSArt, Math.min(8, gl.capabilities.getMaxAnisotropy()))
       content.scale.multiplyScalar(THREE_DS_CARD_HEIGHT / 32.2)
       cartridge.add(content)
       model.add(cartridge)
@@ -335,7 +340,7 @@ function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, cont
     const powerSwitch = model.getObjectByName('switch_low_External_0')
     const insertionTravel = cartridgeBounds.getSize(new Vector3()).y * 32.2 * .36
     return { model, center: bounds.getCenter(new Vector3()), screen, powerSwitch, switchX: powerSwitch?.position.x ?? 0, led, screenBounds, insertionTravel, cartridgePivot, cartridgeY: cartridgePivot.position.y, cartridgeX: cartridgePivot.position.x, cartridgeZ: cartridgePivot.position.z, cartridges, bodyMeshes, buttons, dpad }
-  }, [scene, memoryScene, threeDSCardScene, threeDSArt, cartridgeLogo, cartridgeArt, cartridgeGlint, serialLabel, progress])
+  }, [scene, umdScene, umdArt, threeDSCardScene, threeDSArt, cartridgeLogo, cartridgeArt, cartridgeGlint, serialLabel, progress, gl])
   const logo = useMemo(() => {
     const canvas = document.createElement('canvas')
     canvas.width = 720; canvas.height = 150
@@ -445,18 +450,18 @@ function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, cont
     if (!group.current) return
     const speed = 1 - Math.exp(-delta * 5)
     // The scroll controls insertion; a completed connection owns the boot sequence.
-    const connectionPoint = cartridgeChoice === 1 ? .86 : cartridgeChoice === 2 ? .68 : .7
+    const connectionPoint = cartridgeChoice === 0 ? .7 : .68
     if (progress.current < .03 && animatedProgress.current < connectionPoint) bootTime.current = null
     let targetProgress = progress.current
     if (!reduced && bootTime.current !== null && progress.current >= .03) {
       bootTime.current += Math.min(delta, .05)
-      targetProgress = connectionPoint + (1 - connectionPoint) * MathUtils.smootherstep(bootTime.current, .3, cartridgeChoice === 1 ? 2.3 : 2.7)
+      targetProgress = connectionPoint + (1 - connectionPoint) * MathUtils.smootherstep(bootTime.current, .3, cartridgeChoice === 1 ? 3.2 : 2.7)
     }
     const difference = targetProgress - animatedProgress.current
     const step = Math.min(Math.abs(difference), (cartridgeChoice === 2 ? .45 : .65) * Math.min(delta, .05))
     let nextProgress = reduced ? progress.current : animatedProgress.current + Math.sign(difference) * step
     if (!reduced && difference > 0) {
-      const connectionPoint = cartridgeChoice === 1 ? .86 : cartridgeChoice === 2 ? .68 : .7
+      const connectionPoint = cartridgeChoice === 0 ? .7 : .68
       if (animatedProgress.current < connectionPoint && nextProgress > connectionPoint) nextProgress = connectionPoint
       else if (animatedProgress.current === connectionPoint && impactTime.current < .4) nextProgress = connectionPoint
     }
@@ -474,7 +479,8 @@ function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, cont
       if (!reduced) bootTime.current = 0
       playSound('insert')
     }
-    const powerPoint = cartridgeChoice === 2 ? .94 : .91
+    if (cartridgeChoice === 1 && previousProgress.current < .79 && p >= .79) playSound('insert')
+    const powerPoint = cartridgeChoice === 1 ? .97 : cartridgeChoice === 2 ? .94 : .91
     if (previousProgress.current < powerPoint && p >= powerPoint) playSound('power')
     const power = MathUtils.smootherstep(p, .88, .97)
     if (screen) {
@@ -508,23 +514,24 @@ function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, cont
       item.position.x = cartridgeX - Math.sin(angle) * radius * (1 - carouselExit) / 32.2
       item.position.y = cartridgeY + cartridgeOffset / 32.2
       item.position.z = cartridgeZ + radius * (1 - Math.cos(angle)) * (1 - carouselExit) / 32.2
-      const memorySpin = cartridgeChoice !== 0 && i === cartridgeChoice ? MathUtils.smootherstep(p, 0, .32) * Math.PI * 2 : 0
-      item.rotation.y = (i === 0 ? spin * Math.PI * 2 : memorySpin) + facing * (1 - carouselExit)
+      const mediaSpin = cartridgeChoice !== 0 && i === cartridgeChoice ? MathUtils.smootherstep(p, 0, .32) * Math.PI * 2 : 0
+      item.rotation.y = (i === 0 ? spin * Math.PI * 2 : mediaSpin) + facing * (1 - carouselExit) + (i === 1 ? Math.PI : 0)
       const scale = (mobile ? .66 : .78) + (cartridgeChoice !== 1 && i === 0 ? carouselExit * (mobile ? .34 : .22) : 0)
       const activeItem = i === cartridgeChoice
       item.scale.setScalar(scale)
       if (!activeItem) {
         item.position.x -= Math.sin(angle) * carouselExit * 5 / 32.2
+        if (!reduced) item.position.y += carouselExit * (2 * cameraDistance.current * Math.tan((camera as PerspectiveCamera).fov * Math.PI / 360) + 4) / 32.2
         item.position.z += carouselExit * 4 / 32.2
       }
       item.visible = activeItem || carouselExit < .99
     }
     if (cartridgeChoice !== 0 && p < .32) {
       group.current.updateWorldMatrix(true, true)
-      cartridges[cartridgeChoice].getWorldPosition(memoryAnchor.current.position)
-      cartridges[cartridgeChoice].getWorldQuaternion(memoryAnchor.current.rotation)
-      cartridges[cartridgeChoice].getWorldScale(memoryAnchor.current.scale)
-      memoryAnchor.current.ready = true
+      cartridges[cartridgeChoice].getWorldPosition(mediaAnchor.current.position)
+      cartridges[cartridgeChoice].getWorldQuaternion(mediaAnchor.current.rotation)
+      cartridges[cartridgeChoice].getWorldScale(mediaAnchor.current.scale)
+      mediaAnchor.current.ready = true
     }
     cartridgePivot.rotation.x = -.08 * Math.sin(spin * Math.PI)
     cartridgePivot.rotation.z = .06 * Math.sin(spin * Math.PI)
@@ -616,9 +623,9 @@ export default function Preview3D() {
   const [entering, setEntering] = useState(false)
   const exitProgress = useRef(0)
   const [sceneReady, setSceneReady] = useState(false)
-  const [playStationReady, setPlayStationReady] = useState(false)
+  const [pspReady, setPSPReady] = useState(false)
   const [threeDSReady, setThreeDSReady] = useState(false)
-  const experienceReady = sceneReady && playStationReady && threeDSReady
+  const experienceReady = sceneReady && pspReady && threeDSReady
   const [soundReady, setSoundReady] = useState(false)
   const soundPreference = useRef(soundReady)
   const [ready, setReady] = useState(false)
@@ -630,13 +637,14 @@ export default function Preview3D() {
   const progress = useRef(0)
   const motionProgress = useRef(0)
   const cameraDistance = useRef(10.8)
-  const memoryAnchor = useRef<MemoryAnchor>({ position: new Vector3(), rotation: new Quaternion(), scale: new Vector3(1, 1, 1), ready: false })
+  const mediaAnchor = useRef<MediaAnchor>({ position: new Vector3(), rotation: new Quaternion(), scale: new Vector3(1, 1, 1), ready: false })
   const screenElement = useRef<HTMLDivElement>(null)
+  const pspScreen = useRef<HTMLDivElement>(null)
   const threeDSScreen = useRef<HTMLDivElement>(null)
   useEffect(() => {
     let distance = 0
     const onScroll = () => {
-      const waiting = (cartridgeChoice === 1 && !playStationReady) || (cartridgeChoice === 2 && !threeDSReady)
+      const waiting = (cartridgeChoice === 1 && !pspReady) || (cartridgeChoice === 2 && !threeDSReady)
       progress.current = waiting || (reducedMotion && !confirmed) ? 0 : distance > 0 ? Math.min(1, Math.max(0, window.scrollY / distance)) : 1
       setCarouselVisible(progress.current < .04)
     }
@@ -645,7 +653,7 @@ export default function Preview3D() {
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('resize', onResize, { passive: true })
     return () => { window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onResize) }
-  }, [cartridgeChoice, confirmed, playStationReady, threeDSReady, reducedMotion])
+  }, [cartridgeChoice, confirmed, pspReady, threeDSReady, reducedMotion])
   useEffect(() => {
     if (!carouselVisible) return
     const onKey = (event: KeyboardEvent) => {
@@ -659,7 +667,7 @@ export default function Preview3D() {
     return () => window.removeEventListener('keydown', onKey)
   }, [carouselVisible])
   function finishEntry() {
-    history.replaceState(null, '', cartridgeChoice === 1 ? '/#ps2' : cartridgeChoice === 2 ? '/#3ds' : '/#projetos')
+    history.replaceState(null, '', cartridgeChoice === 1 ? '/#psp' : cartridgeChoice === 2 ? '/#3ds' : '/#projetos')
     setEntered(true)
     window.scrollTo(0, 0)
   }
@@ -674,7 +682,7 @@ export default function Preview3D() {
       return
     }
     try { sessionStorage.setItem('portfolio-intro', 'seen') } catch { /* O conteúdo continua disponível. */ }
-    const destination = cartridgeChoice === 1 ? 'ps2' : cartridgeChoice === 2 ? '3ds' : section
+    const destination = cartridgeChoice === 1 ? 'psp' : cartridgeChoice === 2 ? '3ds' : section
     if (window.location.pathname === '/') {
       history.replaceState(null, '', `/#${destination}`)
       window.location.reload()
@@ -710,8 +718,8 @@ export default function Preview3D() {
     return () => window.removeEventListener('keydown', onKey)
   }, [ready, selected])
   if (entered) return <PortfolioPlaceholder />
-  return <main className={`preview-3d${entering ? ' preview-3d--entering' : ''}${(cartridgeChoice === 1 && !playStationReady) || (cartridgeChoice === 2 && !threeDSReady) ? ' preview-3d--waiting' : ''}`}>
-    <div className={`preview-stage${cartridgeChoice === 1 ? ' preview-stage--ps2' : cartridgeChoice === 2 ? ' preview-stage--3ds' : ''}`}>
+  return <main className={`preview-3d${entering ? ' preview-3d--entering' : ''}${(cartridgeChoice === 1 && !pspReady) || (cartridgeChoice === 2 && !threeDSReady) ? ' preview-3d--waiting' : ''}`}>
+    <div className={`preview-stage${cartridgeChoice === 1 ? ' preview-stage--psp' : cartridgeChoice === 2 ? ' preview-stage--3ds' : ''}`}>
     <button className="preview-skip" onClick={() => openPortfolio()}>Pular intro ↗</button>
     {experienceReady && <button className="preview-sound" aria-pressed={soundReady} onClick={() => window.dispatchEvent(new Event(soundReady ? 'portfolio-disable-sound' : 'portfolio-enable-sound'))}>{soundReady ? 'Desativar som' : 'Ativar som'} ♪</button>}
     <SceneError><Canvas dpr={[1, 2]} camera={{ position: [0, 0, 10.8], fov: 30, near: .1, far: 100 }} fallback={<WebGLFallback />}>
@@ -720,21 +728,33 @@ export default function Preview3D() {
         <ambientLight intensity={cartridgeChoice === 1 ? .45 : .65} />
         <directionalLight position={[4, 7, 6]} intensity={cartridgeChoice === 1 ? 2.6 : 1.3} />
         <directionalLight position={[-5, 2, 3]} intensity={.45} />
-        <Environment resolution={128}><Lightformer intensity={2} position={[0, 4, 5]} scale={[8, 4, 1]} /><Lightformer intensity={1} position={[-5, 0, 3]} scale={[4, 6, 1]} /></Environment>
-        <Console onHover={setHover} onReady={setSceneReady} onIntroReady={setReady} onSoundReady={setSoundReady} onControl={useControl} controlsReady={ready && cartridgeChoice === 0} cartridgeChoice={cartridgeChoice} onCartridgeChoice={setCartridgeChoice} carouselVisible={carouselVisible} memoryAnchor={memoryAnchor} motionProgress={motionProgress} soundPreference={soundPreference} progress={progress} screenElement={screenElement} cameraDistance={cameraDistance} exitProgress={exitProgress} onEntered={finishEntry} />
-        <PlayStationScene active={cartridgeChoice === 1} progress={motionProgress} cameraDistance={cameraDistance} memoryAnchor={memoryAnchor} onReady={setPlayStationReady} onIntroReady={setReady} exitProgress={exitProgress} onEntered={finishEntry} />
-        <ThreeDSScene active={cartridgeChoice === 2} progress={motionProgress} cameraDistance={cameraDistance} cardAnchor={memoryAnchor} screenElement={threeDSScreen} onReady={setThreeDSReady} onIntroReady={setReady} exitProgress={exitProgress} onEntered={finishEntry} />
+        <Environment resolution={128}><color attach="background" args={[cartridgeChoice === 1 ? '#50545c' : '#000000']} />{cartridgeChoice === 1 && <Lightformer intensity={1.5} position={[0, -4, 5]} scale={[6, 5, 1]} />}<Lightformer intensity={2} position={[0, 4, 5]} scale={[8, 4, 1]} /><Lightformer intensity={1} position={[-5, 0, 3]} scale={[4, 6, 1]} /></Environment>
+        <Console onHover={setHover} onReady={setSceneReady} onIntroReady={setReady} onSoundReady={setSoundReady} onControl={useControl} controlsReady={ready && cartridgeChoice === 0} cartridgeChoice={cartridgeChoice} onCartridgeChoice={setCartridgeChoice} carouselVisible={carouselVisible} mediaAnchor={mediaAnchor} motionProgress={motionProgress} soundPreference={soundPreference} progress={progress} screenElement={screenElement} cameraDistance={cameraDistance} exitProgress={exitProgress} onEntered={finishEntry} />
+        <PSPScene screenElement={pspScreen} active={cartridgeChoice === 1} progress={motionProgress} cameraDistance={cameraDistance} mediaAnchor={mediaAnchor} onReady={setPSPReady} onIntroReady={setReady} exitProgress={exitProgress} onEntered={finishEntry} />
+        <ThreeDSScene active={cartridgeChoice === 2} progress={motionProgress} cameraDistance={cameraDistance} cardAnchor={mediaAnchor} screenElement={threeDSScreen} onReady={setThreeDSReady} onIntroReady={setReady} exitProgress={exitProgress} onEntered={finishEntry} />
         <ContactShadows position={[0, -2.42, 0]} opacity={.35} scale={8} blur={2} far={4} resolution={128} smooth={false} />
       </Suspense>
     </Canvas><Loading ready={experienceReady} /></SceneError>
-    {cartridgeChoice === 1 && !playStationReady && <LoadingSkeleton variant="ps2" />}
-    {ready && cartridgeChoice === 1 && !debug && <section className="preview-ps2-menu" aria-label="Sistema AndrdeStation 2">
-      <div className="ps2-system-orbit" aria-hidden="true" />
-      <p className="ps2-system-name">ANDRDESTATION 2</p>
-      <h1>Luciano Andrade Filho</h1>
-      <button className="ps2-save" onClick={() => openPortfolio()}><span className="ps2-save-icon" aria-hidden="true"><i>andrde</i></span><span>ABRIR PORTFÓLIO →</span></button>
-      <button className="ps2-back" onClick={() => useControl('b')}>Voltar ao carrossel</button>
-    </section>}
+    {cartridgeChoice === 1 && !pspReady && <LoadingSkeleton variant="psp" />}
+    {ready && cartridgeChoice === 1 && !debug && <div ref={pspScreen} className="preview-psp-screen" role="region" aria-label="Sistema Andrde PSP">
+      <div className="psp-wave" aria-hidden="true" />
+      <div className="psp-status" aria-hidden="true"><span>ANDRDE PSP</span><span className="psp-battery">▰ ▰ ▰</span></div>
+      <div className="psp-categories" aria-hidden="true">
+        <span className="psp-category">⚙</span><span className="psp-category">♫</span><span className="psp-category">▣</span>
+        <span className="psp-category psp-category--selected"><svg viewBox="0 0 64 48"><path d="M16 14h32c5 0 8 4 9 9l3 12c1 5-4 8-8 5l-10-7H22l-10 7c-4 3-9 0-8-5l3-12c1-5 4-9 9-9Z" fill="none" stroke="currentColor" strokeWidth="3"/><path d="M17 20v12m-6-6h12m20-3h.1m6 6h.1" stroke="currentColor" strokeWidth="4" strokeLinecap="round"/></svg><small>Jogo</small></span>
+        <span className="psp-category">◉</span><span className="psp-category">✦</span>
+      </div>
+      <div className="psp-library">
+        <button className="psp-game" onClick={() => openPortfolio()} aria-label="Abrir portfólio">
+          <img src="/images/psp-urban-screen-v2.webp" alt="" />
+          <span><strong>Portfólio</strong><small>Luciano Andrade Filho</small></span>
+        </button>
+      </div>
+      <div className="psp-actions"><button className="psp-back" onClick={() => useControl('b')} aria-label="Voltar ao carrossel"><b>○</b> Voltar</button><span aria-hidden="true"><b>×</b> Entrar</span></div>
+    </div>}
+    {ready && cartridgeChoice === 1 && !debug && <div className="preview-touch-controls" aria-label="Controles do PSP">
+      <button onClick={() => useControl('b')}>VOLTAR</button><button onClick={() => openPortfolio()}>ABRIR PORTFÓLIO</button>
+    </div>}
     {ready && cartridgeChoice === 2 && !debug && <div ref={threeDSScreen} className="preview-3ds-screen" aria-label="Menu do Andrde EDS">
       <header><span>ANDRDE EDS</span><span>HOME</span></header>
       <div className="preview-3ds-library">
@@ -759,14 +779,14 @@ export default function Preview3D() {
     </nav>}
     {experienceReady && carouselVisible && !debug && <div className={`preview-carousel${reducedMotion ? ' preview-carousel--reduced' : ''}`} role="group" aria-label="Escolher cartucho">
       <button aria-label="Cartucho anterior" onClick={() => setCartridgeChoice((current) => (current + 2) % 3)}>←</button>
-      <div className="preview-carousel-label" aria-live="polite"><strong>{cartridgeChoice === 0 ? 'GAME BOY' : cartridgeChoice === 1 ? 'ANDRDESTATION 2' : 'ANDRDE EDS'}</strong><span>{reducedMotion ? 'ABRA PARA CONTINUAR' : 'ROLE PARA INSERIR ↓'}</span></div>
+      <div className="preview-carousel-label" aria-live="polite"><strong>{cartridgeChoice === 0 ? 'GAME BOY' : cartridgeChoice === 1 ? 'ANDRDE PSP' : 'ANDRDE EDS'}</strong><span>{reducedMotion ? 'ABRA PARA CONTINUAR' : 'ROLE PARA INSERIR ↓'}</span></div>
       <button aria-label="Próximo cartucho" onClick={() => setCartridgeChoice((current) => (current + 1) % 3)}>→</button>
       {reducedMotion && <button className="preview-carousel-open" disabled={!experienceReady} onClick={() => setConfirmed(true)}>ABRIR</button>}
     </div>}
     {ready && cartridgeChoice === 0 && <span className="preview-hint">START / ENTER · TOQUE PARA ABRIR · Z PARA VOLTAR</span>}
     <details className="preview-credits">
       <summary>Créditos</summary>
-      <p>Modelo 3D <a href="https://skfb.ly/o8DRy">“Nintendo Game Boy (Original 1989)”</a> por Lokeig, sob <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0</a>. Modelo e texturas adaptados.<br /><br /><a href="https://sketchfab.com/3d-models/playstation-2-99d0c0c7f024430ca1c6179a07d85ffa">“PlayStation 2”</a> por Artem P e <a href="https://sketchfab.com/3d-models/high-detail-ps2-memory-card-c856b2e49bb24874b6c3a1a209fa4993">“high detail PS2 Memory card”</a> por btomaek, sob <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Modelos e texturas adaptados.<br /><br /><a href="https://sketchfab.com/3d-models/nintendo-3ds-xl-6cf20040dc0e44559c3e69723945afcc">“Nintendo 3DS XL”</a> por Joshua P. e cartucho de <a href="https://sketchfab.com/3d-models/3ds-handheld-console-ccda52e911194834a9b4002c91de815f">“3DS Handheld Console”</a> por Ryan_Nein, sob <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Modelos e texturas adaptados.</p>
+      <p>Modelo 3D <a href="https://skfb.ly/o8DRy">“Nintendo Game Boy (Original 1989)”</a> por Lokeig, sob <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0</a>. Modelo e texturas adaptados.<br /><br /><a href="https://sketchfab.com/3d-models/sony-psp-dca89d10ec304d0cab76837750df7761">“Sony PSP”</a> por Ilya Ostrovsky e UMD de <a href="https://sketchfab.com/3d-models/psp-handheld-console-db8c125291314639a32de8dfb66b33fa">“Psp Handheld Console”</a> por Ryan_Nein, sob <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Modelos e texturas adaptados.<br /><br /><a href="https://sketchfab.com/3d-models/nintendo-3ds-xl-6cf20040dc0e44559c3e69723945afcc">“Nintendo 3DS XL”</a> por Joshua P. e cartucho de <a href="https://sketchfab.com/3d-models/3ds-handheld-console-ccda52e911194834a9b4002c91de815f">“3DS Handheld Console”</a> por Ryan_Nein, sob <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Modelos e texturas adaptados.</p>
     </details>
     {debug && <output className="preview-debug">{hover || 'Passe o cursor sobre um material'}</output>}
     </div>
