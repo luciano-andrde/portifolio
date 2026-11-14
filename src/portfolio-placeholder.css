@@ -1,0 +1,50 @@
+.portfolio-placeholder{
+  --placeholder-bg:#9bbc0f;
+  --placeholder-ink:#0f380f;
+  min-height:100vh;
+  min-height:100dvh;
+  display:grid;
+  place-items:center;
+  padding:max(32px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) max(32px,env(safe-area-inset-bottom)) max(24px,env(safe-area-inset-left));
+  background:var(--placeholder-bg);
+  color:var(--placeholder-ink);
+}
+.portfolio-placeholder[data-theme="dark"]{--placeholder-bg:#0f380f;--placeholder-ink:#c6dd6b}
+.portfolio-placeholder[data-experience="ps2"]{
+  --placeholder-bg:#0c1220;
+  --placeholder-ink:#e4edff;
+  background:radial-gradient(ellipse at 50% 45%,#1c355b 0%,#101a2d 45%,#080d17 100%);
+}
+.portfolio-placeholder[data-experience="ps2"] h1{
+  font:500 clamp(32px,6vw,82px)/1.2 'DM Mono',monospace;
+  letter-spacing:.04em;
+  text-shadow:0 0 24px rgba(125,169,255,.24);
+}
+.portfolio-placeholder[data-experience="ps2"] .placeholder-home{border-width:1px;border-color:#8ca4cd}
+.portfolio-placeholder[data-experience="3ds"]{--placeholder-bg:#382629;--placeholder-ink:#f4eded;background:radial-gradient(ellipse at 50% 35%,#5f373b 0%,#382629 60%,#171516 100%)}
+.portfolio-placeholder[data-experience="3ds"] h1{font:600 clamp(38px,8vw,100px)/1.05 sans-serif;letter-spacing:-.04em;text-transform:none}
+.portfolio-placeholder[data-experience="3ds"] .placeholder-home{border:1px solid #d9a2a8;border-radius:12px}
+.placeholder-home{
+  position:absolute;
+  top:max(16px,env(safe-area-inset-top));
+  left:max(16px,env(safe-area-inset-left));
+  display:inline-flex;
+  align-items:center;
+  min-height:44px;
+  padding:0 12px;
+  border:2px solid currentColor;
+  color:inherit;
+  font:600 12px 'DM Mono',monospace;
+  text-decoration:none;
+}
+.placeholder-home:hover{background:var(--placeholder-ink);color:var(--placeholder-bg)}
+.placeholder-home:focus-visible{outline:3px solid currentColor;outline-offset:4px}
+.portfolio-placeholder h1{
+  margin:0;
+  max-width:100%;
+  font:700 clamp(46px,10vw,130px)/.96 'Pixelify Sans',monospace;
+  letter-spacing:-.035em;
+  text-align:center;
+  text-transform:uppercase;
+  overflow-wrap:anywhere;
+}

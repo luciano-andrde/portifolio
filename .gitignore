@@ -3,10 +3,17 @@ node_modules/
 dist/
 dist-ssr/
 coverage/
-test-results/
-playwright-report/
 *.tsbuildinfo
 .vercel/
+.vite/
+.cache/
+
+# Generated test reports and local codebase maps
+/test-results/
+/playwright-report/
+/blob-report/
+/.playwright/
+/graphify-out/
 
 # Local environment and secrets
 .env
@@ -27,5 +34,10 @@ pnpm-debug.log*
 Thumbs.db
 .idea/
 
-# Modelo original mantido localmente; o site usa a versão otimizada
+# Original model downloads; the site uses the optimized GLBs
 /public/models/nintendo_game_boy_original_1989.glb
+/public/models/playstation_2.glb
+/public/models/sony_playstation_2.glb
+/public/models/high_detail_ps2_memory_card.glb
+/public/models/nintendo_3ds_xl.glb
+/public/models/3ds_handheld_console.glb

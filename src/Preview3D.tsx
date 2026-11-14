@@ -1,11 +1,24 @@
 import { Component, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
-import { ContactShadows, Environment, Lightformer, useGLTF, useProgress, useTexture } from '@react-three/drei'
-import { Box3, CanvasTexture, Color, Group, Material, MathUtils, Mesh, MeshStandardMaterial, Object3D, PerspectiveCamera, ShaderChunk, SRGBColorSpace, Texture, Vector3 } from 'three'
+import { ContactShadows, Environment, Lightformer, useGLTF, useTexture } from '@react-three/drei'
+import { Box3, CanvasTexture, Color, Group, Material, MathUtils, Mesh, MeshStandardMaterial, Object3D, PerspectiveCamera, Quaternion, ShaderChunk, SRGBColorSpace, Texture, Vector3 } from 'three'
+import PlayStationScene from './PlayStationScene'
+import ThreeDSScene from './ThreeDSScene'
+import LoadingSkeleton from './LoadingSkeleton'
+import PortfolioPlaceholder from './PortfolioPlaceholder'
+import { createMemoryCard, MEMORY_DISPLAY_HEIGHT, type MemoryAnchor } from './memory-card'
+import { createThreeDSCard, THREE_DS_CARD_HEIGHT } from './three-ds-card'
 import './preview-3d.css'
 
 const debug = new URLSearchParams(window.location.search).get('debug') === '1'
-const sections = [{ id: 'projetos', label: 'PROJETOS' }, { id: 'sobre', label: 'SOBRE' }, { id: 'trajetoria', label: 'TRAJETÓRIA' }, { id: 'contato', label: 'CONTATO' }]
+useGLTF.preload('/models/console-otimizado.glb')
+useGLTF.preload('/models/memory-card-otimizado.glb')
+useGLTF.preload('/models/playstation-2-otimizado.glb')
+useGLTF.preload('/models/andrde-eds-rigged.glb')
+useGLTF.preload('/models/cartucho-3ds-otimizado.glb')
+useTexture.preload('/images/rotulo-andrde.png')
+useTexture.preload('/images/rotulo-3ds-novo.webp')
+const sections = [{ id: 'projetos', label: 'ABRIR PORTFÓLIO' }]
 type Control = 'up' | 'down' | 'left' | 'right' | 'a' | 'b' | 'start' | 'select'
 
 class SceneError extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -16,43 +29,68 @@ class SceneError extends Component<{ children: ReactNode }, { failed: boolean }>
   }
 }
 
-function CameraFit() {
+function CameraFit({ distanceRef }: { distanceRef: RefObject<number> }) {
   const { camera, size } = useThree()
   useEffect(() => {
     const perspective = camera as PerspectiveCamera
     const mobile = window.matchMedia('(pointer: coarse)').matches
     const distance = (mobile ? 3.6 : 3.3) / (2 * Math.tan(perspective.fov * Math.PI / 360) * size.width / size.height)
     const heightDistance = mobile ? 10.8 * .864 * size.height / Math.max(1, size.height - 140) : 10.8
-    perspective.position.z = Math.max(10.8, distance, heightDistance)
+    distanceRef.current = Math.max(10.8, distance, heightDistance)
+    perspective.position.z = distanceRef.current
     perspective.updateProjectionMatrix()
-  }, [camera, size])
+  }, [camera, distanceRef, size])
   return null
 }
 
 function Loading({ ready }: { ready: boolean }) {
-  const { active } = useProgress()
-  return active || !ready ? <div className="preview-loading" role="status">Carregando console…</div> : null
+  return !ready ? <LoadingSkeleton /> : null
 }
 
-function WebGLFallback({ onReady }: { onReady: (ready: boolean) => void }) {
-  useEffect(() => { onReady(true) }, [onReady])
+function WebGLFallback() {
   return <div className="preview-error">WebGL não está disponível. <a href="/#projetos">Abrir portfólio</a></div>
 }
 
-function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, controlsReady, soundPreference, progress, screenElement }: { onHover: (name: string) => void, onReady: (ready: boolean) => void, onIntroReady: (ready: boolean) => void, onSoundReady: (ready: boolean) => void, onControl: (control: Control) => void, controlsReady: boolean, soundPreference: RefObject<boolean>, progress: RefObject<number>, screenElement: RefObject<HTMLDivElement | null> }) {
+function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, controlsReady, cartridgeChoice, onCartridgeChoice, carouselVisible, memoryAnchor, motionProgress, soundPreference, progress, screenElement, cameraDistance, exitProgress, onEntered }: { cameraDistance: RefObject<number>, exitProgress: RefObject<number>, onEntered: () => void, onHover: (name: string) => void, onReady: (ready: boolean) => void, onIntroReady: (ready: boolean) => void, onSoundReady: (ready: boolean) => void, onControl: (control: Control) => void, controlsReady: boolean, cartridgeChoice: number, onCartridgeChoice: (choice: number) => void, carouselVisible: boolean, memoryAnchor: RefObject<MemoryAnchor>, motionProgress: RefObject<number>, soundPreference: RefObject<boolean>, progress: RefObject<number>, screenElement: RefObject<HTMLDivElement | null> }) {
   const { scene } = useGLTF('/models/console-otimizado.glb')
+  const { scene: memoryScene } = useGLTF('/models/memory-card-otimizado.glb')
+  const { scene: threeDSCardScene } = useGLTF('/models/cartucho-3ds-otimizado.glb')
   const { gl, camera, scene: renderScene } = useThree()
   const cartridgeArt = useTexture('/images/rotulo-andrde.png')
+  const threeDSArt = useTexture('/images/rotulo-3ds-novo.webp')
   cartridgeArt.colorSpace = SRGBColorSpace
   const group = useRef<Group>(null)
+  const bootTime = useRef<number | null>(null)
+  const cameraTarget = useMemo(() => new Vector3(), [])
+  const lcdOff = useMemo(() => new Color('#172d18'), [])
+  const lcdOn = useMemo(() => new Color('#718d28'), [])
   const previousProgress = useRef(0)
   const animatedProgress = useRef(0)
   const displayedReady = useRef(false)
   const impactTime = useRef(Infinity)
+  const wheelAngle = useRef(0)
   const pressed = useRef<Control | null>(null)
+  useEffect(() => {
+    if (!controlsReady) return
+    const keys: Record<string, Control> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Enter: 'start', x: 'a', z: 'b', Shift: 'select' }
+    const down = (event: KeyboardEvent) => {
+      if (!event.altKey && !event.ctrlKey && !event.metaKey) pressed.current = keys[event.key] ?? null
+    }
+    const release = () => { pressed.current = null }
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', release)
+    window.addEventListener('blur', release)
+    return () => {
+      release()
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', release)
+      window.removeEventListener('blur', release)
+    }
+  }, [controlsReady])
   const clickSound = useRef<{ context: AudioContext, noise: AudioBuffer } | null>(null)
   const cartridgeGlint = useMemo(() => ({ value: 0 }), [])
   const reduced = useMemo(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
+  const mobile = useMemo(() => window.matchMedia('(pointer: coarse)').matches, [])
   const cartridgeLogo = useMemo(() => {
     const canvas = document.createElement('canvas')
     canvas.width = 1024; canvas.height = 160
@@ -74,7 +112,7 @@ function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, cont
     texture.colorSpace = SRGBColorSpace
     return texture
   }, [])
-  const { model, center, screen, screenBounds, cartridgePivot, cartridgeY, buttons, dpad } = useMemo(() => {
+  const { model, center, screen, powerSwitch, switchX, led, screenBounds, insertionTravel, cartridgePivot, cartridgeY, cartridgeX, cartridgeZ, cartridges, bodyMeshes, buttons, dpad } = useMemo(() => {
     const model = scene.clone(true)
     const names = new Set<string>()
     let grayCartridge: MeshStandardMaterial | undefined
@@ -85,17 +123,20 @@ function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, cont
       if (material instanceof MeshStandardMaterial) grayCartridge = material
     })
     let screen: MeshStandardMaterial | undefined
+    let led: MeshStandardMaterial | undefined
     let screenMesh: Mesh | undefined
     let baseMesh: Mesh | undefined
     let selectMesh: Mesh | undefined
     let dpad: Mesh | undefined
     const buttons = new Map<Control | 'dpad', { object: Object3D, z: number }[]>()
     const cartridgeParts: Object3D[] = []
+    const bodyMeshes: Mesh[] = []
     model.traverse((object) => {
       if (!(object instanceof Mesh)) return
       const materials = Array.isArray(object.material) ? object.material : [object.material]
       materials.forEach((material) => names.add(material.name))
       if (materials.some((material) => material.name === 'Cartridge_2')) { object.visible = false; object.raycast = () => {}; return }
+      if (!materials.some((material) => material.name === 'Cartridge') && object.visible) bodyMeshes.push(object)
       if (object.name === 'base_low_Main_0') baseMesh = object
       if (object.name === 'screen_low_External_0') screenMesh = object
       if (object.name === 'select_low_External_0') selectMesh = object
@@ -111,7 +152,7 @@ function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, cont
           return result
         }
         if (object.name === 'screen_low_External_0') {
-          const result = new MeshStandardMaterial({ color: '#172d18', roughness: .8 })
+          const result = new MeshStandardMaterial({ color: '#172d18', roughness: .42, metalness: 0, emissive: '#718d28', emissiveIntensity: 0 })
           result.name = material.name
           screen = result
           return result
@@ -174,6 +215,8 @@ function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, cont
         }
         if (material.name === 'Main' && material instanceof MeshStandardMaterial) {
           const result = material.clone()
+          result.roughness = .82
+          result.metalness = 0
           result.onBeforeCompile = (shader) => {
             shader.uniforms.serialLabel = { value: serialLabel }
             shader.fragmentShader = `uniform sampler2D serialLabel;
@@ -206,6 +249,21 @@ function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, cont
             shader.fragmentShader = shader.fragmentShader.replace('#include <aomap_fragment>', ShaderChunk.aomap_fragment.replaceAll('texture2D( aoMap, vAoMapUv )', 'cleanSerialSample(aoMap, vAoMapUv)'))
             shader.fragmentShader = shader.fragmentShader.replace('#include <roughnessmap_fragment>', ShaderChunk.roughnessmap_fragment.replaceAll('texture2D( roughnessMap, vRoughnessMapUv )', 'cleanSerialSample(roughnessMap, vRoughnessMapUv)'))
             shader.fragmentShader = shader.fragmentShader.replace('#include <metalnessmap_fragment>', ShaderChunk.metalnessmap_fragment.replaceAll('texture2D( metalnessMap, vMetalnessMapUv )', 'cleanSerialSample(metalnessMap, vMetalnessMapUv)'))
+          }
+          return result
+        }
+        if (material instanceof MeshStandardMaterial) {
+          const result = material.clone()
+          if (object.name === 'battery_low_External_0') {
+            result.emissive.set('#ff2b16')
+            result.emissiveIntensity = 0
+            led = result
+          } else if (/^(a_low|b_low|movement)/.test(object.name)) {
+            result.roughness = .48
+            result.metalness = 0
+          } else if (object.name === 'screenHolder_low_External_0') {
+            result.roughness = .58
+            result.metalness = 0
           }
           return result
         }
@@ -251,8 +309,33 @@ function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, cont
     model.add(cartridgePivot)
     model.updateMatrixWorld(true)
     for (const part of cartridgeParts) cartridgePivot.attach(part)
-    return { model, center: bounds.getCenter(new Vector3()), screen, screenBounds, cartridgePivot, cartridgeY: cartridgePivot.position.y, buttons, dpad }
-  }, [scene, cartridgeLogo, cartridgeArt, cartridgeGlint, serialLabel, progress])
+    const cartridges = [cartridgePivot]
+    cartridgePivot.name = 'carousel_0'
+    for (let i = 0; i < 2; i++) {
+      if (i === 0) {
+        const memory = new Group()
+        memory.name = 'carousel_1'
+        memory.position.copy(cartridgePivot.position)
+        const content = createMemoryCard(memoryScene)
+        content.scale.multiplyScalar(MEMORY_DISPLAY_HEIGHT / 32.2)
+        memory.add(content)
+        model.add(memory)
+        cartridges.push(memory)
+        continue
+      }
+      const cartridge = new Group()
+      cartridge.name = 'carousel_2'
+      cartridge.position.copy(cartridgePivot.position)
+      const content = createThreeDSCard(threeDSCardScene, threeDSArt)
+      content.scale.multiplyScalar(THREE_DS_CARD_HEIGHT / 32.2)
+      cartridge.add(content)
+      model.add(cartridge)
+      cartridges.push(cartridge)
+    }
+    const powerSwitch = model.getObjectByName('switch_low_External_0')
+    const insertionTravel = cartridgeBounds.getSize(new Vector3()).y * 32.2 * .36
+    return { model, center: bounds.getCenter(new Vector3()), screen, powerSwitch, switchX: powerSwitch?.position.x ?? 0, led, screenBounds, insertionTravel, cartridgePivot, cartridgeY: cartridgePivot.position.y, cartridgeX: cartridgePivot.position.x, cartridgeZ: cartridgePivot.position.z, cartridges, bodyMeshes, buttons, dpad }
+  }, [scene, memoryScene, threeDSCardScene, threeDSArt, cartridgeLogo, cartridgeArt, cartridgeGlint, serialLabel, progress])
   const logo = useMemo(() => {
     const canvas = document.createElement('canvas')
     canvas.width = 720; canvas.height = 150
@@ -286,6 +369,7 @@ function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, cont
     return () => { active = false }
   }, [camera, cartridgeArt, cartridgeLogo, gl, logo, model, onReady, renderScene, serialLabel])
   useEffect(() => () => { logo.dispose(); cartridgeLogo.dispose(); serialLabel.dispose() }, [logo, cartridgeLogo, serialLabel])
+  useLayoutEffect(() => { for (const mesh of bodyMeshes) mesh.visible = cartridgeChoice === 0 }, [bodyMeshes, cartridgeChoice])
   useEffect(() => () => { document.body.style.cursor = '' }, [])
   function playSound(kind: 'insert' | 'power' | 'move') {
     const sound = clickSound.current
@@ -360,45 +444,114 @@ function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, cont
   useFrame(({ pointer, camera, size }, delta) => {
     if (!group.current) return
     const speed = 1 - Math.exp(-delta * 5)
-    const difference = progress.current - animatedProgress.current
-    const step = Math.min(Math.abs(difference), .65 * Math.min(delta, .05))
+    // The scroll controls insertion; a completed connection owns the boot sequence.
+    const connectionPoint = cartridgeChoice === 1 ? .86 : cartridgeChoice === 2 ? .68 : .7
+    if (progress.current < .03 && animatedProgress.current < connectionPoint) bootTime.current = null
+    let targetProgress = progress.current
+    if (!reduced && bootTime.current !== null && progress.current >= .03) {
+      bootTime.current += Math.min(delta, .05)
+      targetProgress = connectionPoint + (1 - connectionPoint) * MathUtils.smootherstep(bootTime.current, .3, cartridgeChoice === 1 ? 2.3 : 2.7)
+    }
+    const difference = targetProgress - animatedProgress.current
+    const step = Math.min(Math.abs(difference), (cartridgeChoice === 2 ? .45 : .65) * Math.min(delta, .05))
     let nextProgress = reduced ? progress.current : animatedProgress.current + Math.sign(difference) * step
     if (!reduced && difference > 0) {
-      if (animatedProgress.current < .7 && nextProgress > .7) nextProgress = .7
-      else if (animatedProgress.current === .7 && impactTime.current < .4) nextProgress = .7
+      const connectionPoint = cartridgeChoice === 1 ? .86 : cartridgeChoice === 2 ? .68 : .7
+      if (animatedProgress.current < connectionPoint && nextProgress > connectionPoint) nextProgress = connectionPoint
+      else if (animatedProgress.current === connectionPoint && impactTime.current < .4) nextProgress = connectionPoint
     }
     animatedProgress.current = nextProgress
     const p = animatedProgress.current
-    const isReady = p >= .98
+    motionProgress.current = p
+    const isReady = cartridgeChoice === 0 && p >= .98
     if (isReady !== displayedReady.current) { displayedReady.current = isReady; onIntroReady(isReady) }
     const rise = MathUtils.smoothstep(p, .08, .48)
     const insert = MathUtils.smootherstep(p, .42, .7)
     const spin = reduced ? 0 : MathUtils.smootherstep(p, 0, .38)
     const turn = MathUtils.smoothstep(p, .7, .94)
-    if (previousProgress.current < .7 && p >= .7) {
+    if (previousProgress.current < connectionPoint && p >= connectionPoint) {
       if (!reduced) impactTime.current = 0
+      if (!reduced) bootTime.current = 0
       playSound('insert')
     }
-    if (previousProgress.current < .91 && p >= .91) playSound('power')
-    if (screen && (previousProgress.current > .91) !== (p > .91)) screen.color.set(p > .91 ? '#718d28' : '#172d18')
+    const powerPoint = cartridgeChoice === 2 ? .94 : .91
+    if (previousProgress.current < powerPoint && p >= powerPoint) playSound('power')
+    const power = MathUtils.smootherstep(p, .88, .97)
+    if (screen) {
+      screen.color.copy(lcdOff).lerp(lcdOn, power)
+      screen.emissiveIntensity = power * .12
+    }
+    if (powerSwitch) powerSwitch.position.x = switchX + power * .5
+    if (led) led.emissiveIntensity = power * .7
     previousProgress.current = p
     impactTime.current += delta
     const impact = reduced || impactTime.current > .45 ? 0 : Math.sin(impactTime.current * 42) * Math.exp(-impactTime.current * 11)
-    group.current.position.y = reduced ? 0 : -7 * (1 - rise) - impact * .055
-    const x = reduced ? 0 : -pointer.y * Math.PI / 30 * turn
-    const y = reduced ? 0 : Math.PI * (1 - turn) + pointer.x * Math.PI / 30 * turn
+    group.current.position.y = reduced ? (p < .1 ? -7 : 0) : -7 * (1 - rise) - impact * .055
+    group.current.visible = cartridgeChoice === 0 || p < .32
+    const inspecting = MathUtils.smootherstep(p, .28, .52) * (1 - turn)
+    const hover = mobile || exitProgress.current > 0 ? 0 : MathUtils.smootherstep(p, .98, 1)
+    const x = reduced ? 0 : -.08 * inspecting - pointer.y * Math.PI / 90 * hover
+    const y = reduced ? 0 : Math.PI * (1 - turn) + .2 * inspecting + pointer.x * Math.PI / 90 * hover
     group.current.rotation.x += (x - group.current.rotation.x) * speed
     group.current.rotation.y = y
     group.current.rotation.z = impact * .006
-    const cartridgeOffset = reduced ? 0 : 7 * (1 - rise) + 2.1 * rise - insert * .75 - 1.35
-    cartridgePivot.position.y = cartridgeY + cartridgeOffset / 32.2
-    cartridgePivot.rotation.y = spin * Math.PI * 2
+    const cartridgeOffset = reduced ? (p < .1 ? 5.65 : 0) : 5.65 * (1 - rise) + insertionTravel * rise * (1 - insert)
+    const carouselExit = reduced ? (p < .1 ? 0 : 1) : MathUtils.smoothstep(p, 0, cartridgeChoice !== 0 ? .3 : .14)
+    const targetAngle = -cartridgeChoice * Math.PI * 2 / 3
+    const angleDifference = MathUtils.euclideanModulo(targetAngle - wheelAngle.current + Math.PI, Math.PI * 2) - Math.PI
+    wheelAngle.current += reduced ? angleDifference : angleDifference * (1 - Math.exp(-delta * 5))
+    const radius = mobile ? 1.15 : 1.85
+    for (let i = 0; i < cartridges.length; i++) {
+      const item = cartridges[i]
+      const angle = wheelAngle.current + i * Math.PI * 2 / 3
+      const facing = Math.atan2(Math.sin(angle), Math.cos(angle))
+      item.position.x = cartridgeX - Math.sin(angle) * radius * (1 - carouselExit) / 32.2
+      item.position.y = cartridgeY + cartridgeOffset / 32.2
+      item.position.z = cartridgeZ + radius * (1 - Math.cos(angle)) * (1 - carouselExit) / 32.2
+      const memorySpin = cartridgeChoice !== 0 && i === cartridgeChoice ? MathUtils.smootherstep(p, 0, .32) * Math.PI * 2 : 0
+      item.rotation.y = (i === 0 ? spin * Math.PI * 2 : memorySpin) + facing * (1 - carouselExit)
+      const scale = (mobile ? .66 : .78) + (cartridgeChoice !== 1 && i === 0 ? carouselExit * (mobile ? .34 : .22) : 0)
+      const activeItem = i === cartridgeChoice
+      item.scale.setScalar(scale)
+      if (!activeItem) {
+        item.position.x -= Math.sin(angle) * carouselExit * 5 / 32.2
+        item.position.z += carouselExit * 4 / 32.2
+      }
+      item.visible = activeItem || carouselExit < .99
+    }
+    if (cartridgeChoice !== 0 && p < .32) {
+      group.current.updateWorldMatrix(true, true)
+      cartridges[cartridgeChoice].getWorldPosition(memoryAnchor.current.position)
+      cartridges[cartridgeChoice].getWorldQuaternion(memoryAnchor.current.rotation)
+      cartridges[cartridgeChoice].getWorldScale(memoryAnchor.current.scale)
+      memoryAnchor.current.ready = true
+    }
     cartridgePivot.rotation.x = -.08 * Math.sin(spin * Math.PI)
     cartridgePivot.rotation.z = .06 * Math.sin(spin * Math.PI)
     cartridgeGlint.value = spin
     for (const [control, parts] of buttons) {
       const isPressed = control === 'dpad' ? ['up', 'down', 'left', 'right'].includes(pressed.current ?? '') : pressed.current === control
       for (const part of parts) part.object.position.z = part.z - (isPressed && !reduced ? .45 : 0)
+    }
+    if (cartridgeChoice === 0) {
+      const close = reduced ? 0 : MathUtils.smootherstep(p, .3, .6) * (1 - MathUtils.smootherstep(p, .72, .96))
+      cameraTarget.set(0, 1.5 * close, 0)
+      let distance = cameraDistance.current * (1 - .16 * close)
+      if (exitProgress.current > 0) {
+        exitProgress.current = Math.min(1, exitProgress.current + delta / .9)
+        const zoom = MathUtils.smootherstep(exitProgress.current, 0, 1)
+        const screenY = ((screenBounds.min.y + screenBounds.max.y) / 2 - center.y) * 32.2
+        const screenZ = (screenBounds.max.z - center.z) * 32.2
+        const screenHeight = (screenBounds.max.y - screenBounds.min.y) * 32.2
+        const screenWidth = (screenBounds.max.x - screenBounds.min.x) * 32.2
+        const fillDistance = Math.min(screenHeight, screenWidth * size.height / size.width) * .4 / Math.tan((camera as PerspectiveCamera).fov * Math.PI / 360)
+        cameraTarget.y = MathUtils.lerp(cameraTarget.y, screenY, zoom)
+        distance = MathUtils.lerp(distance, screenZ + fillDistance, zoom)
+        if (exitProgress.current === 1) onEntered()
+      }
+      camera.position.set(0, cameraTarget.y, distance)
+      camera.quaternion.identity()
+      camera.updateMatrixWorld()
     }
     if (screenElement.current && p >= .98 && !debug) {
       group.current.updateWorldMatrix(true, false)
@@ -444,43 +597,93 @@ function Console({ onHover, onReady, onIntroReady, onSoundReady, onControl, cont
     return null
   }
   return <group ref={group} onPointerMove={debug ? hover : undefined} onPointerOut={debug ? () => { onHover(''); document.body.style.cursor = '' } : undefined}
+    onClick={!debug && carouselVisible ? (event) => {
+      let object: Object3D | null = event.object
+      while (object && !object.name.startsWith('carousel_')) object = object.parent
+      if (object) { event.stopPropagation(); onCartridgeChoice(Number(object.name.slice(9))) }
+    } : undefined}
     onPointerDown={!debug && controlsReady ? (event) => { const control = controlAt(event); if (!control) return; event.stopPropagation(); pressed.current = control; (event.target as Element).setPointerCapture(event.pointerId) } : undefined}
     onPointerUp={!debug && controlsReady ? (event) => { if (!pressed.current) return; event.stopPropagation(); const control = pressed.current; pressed.current = null; (event.target as Element).releasePointerCapture(event.pointerId); onControl(control) } : undefined}
     onPointerCancel={() => { pressed.current = null }}>
     <group scale={32.2}><primitive object={model} position={[-center.x, -center.y, -center.z]} /></group>
-    {!debug && <mesh position={[-.56, -.05, .58]}><planeGeometry args={[1.45, .3]} /><meshBasicMaterial map={logo} transparent depthWrite={false} /></mesh>}
+    {!debug && <mesh visible={cartridgeChoice === 0} position={[-.56, -.05, .58]}><planeGeometry args={[1.45, .3]} /><meshBasicMaterial map={logo} transparent depthWrite={false} /></mesh>}
   </group>
 }
 
 export default function Preview3D() {
   const [hover, setHover] = useState('')
+  const [entered, setEntered] = useState(false)
+  const [entering, setEntering] = useState(false)
+  const exitProgress = useRef(0)
   const [sceneReady, setSceneReady] = useState(false)
+  const [playStationReady, setPlayStationReady] = useState(false)
+  const [threeDSReady, setThreeDSReady] = useState(false)
+  const experienceReady = sceneReady && playStationReady && threeDSReady
   const [soundReady, setSoundReady] = useState(false)
   const soundPreference = useRef(soundReady)
   const [ready, setReady] = useState(false)
   const [selected, setSelected] = useState(0)
+  const [cartridgeChoice, setCartridgeChoice] = useState(0)
+  const [carouselVisible, setCarouselVisible] = useState(true)
+  const [confirmed, setConfirmed] = useState(false)
+  const reducedMotion = useMemo(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
   const progress = useRef(0)
+  const motionProgress = useRef(0)
+  const cameraDistance = useRef(10.8)
+  const memoryAnchor = useRef<MemoryAnchor>({ position: new Vector3(), rotation: new Quaternion(), scale: new Vector3(1, 1, 1), ready: false })
   const screenElement = useRef<HTMLDivElement>(null)
+  const threeDSScreen = useRef<HTMLDivElement>(null)
   useEffect(() => {
     let distance = 0
     const onScroll = () => {
-      progress.current = distance > 0 ? Math.min(1, Math.max(0, window.scrollY / distance)) : 1
+      const waiting = (cartridgeChoice === 1 && !playStationReady) || (cartridgeChoice === 2 && !threeDSReady)
+      progress.current = waiting || (reducedMotion && !confirmed) ? 0 : distance > 0 ? Math.min(1, Math.max(0, window.scrollY / distance)) : 1
+      setCarouselVisible(progress.current < .04)
     }
     const onResize = () => { distance = document.documentElement.scrollHeight - window.innerHeight; onScroll() }
     onResize()
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('resize', onResize, { passive: true })
     return () => { window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onResize) }
-  }, [])
+  }, [cartridgeChoice, confirmed, playStationReady, threeDSReady, reducedMotion])
+  useEffect(() => {
+    if (!carouselVisible) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.target instanceof HTMLButtonElement) return
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault()
+        setCartridgeChoice((current) => (current + (event.key === 'ArrowRight' ? 1 : 2)) % 3)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [carouselVisible])
+  function finishEntry() {
+    history.replaceState(null, '', cartridgeChoice === 1 ? '/#ps2' : cartridgeChoice === 2 ? '/#3ds' : '/#projetos')
+    setEntered(true)
+    window.scrollTo(0, 0)
+  }
   function openPortfolio(section = 'projetos') {
+    if (ready) {
+      if (reducedMotion) finishEntry()
+      else if (exitProgress.current === 0) {
+        setEntering(true)
+        exitProgress.current = .001
+        window.dispatchEvent(new Event('portfolio-move-sound'))
+      }
+      return
+    }
     try { sessionStorage.setItem('portfolio-intro', 'seen') } catch { /* O conteúdo continua disponível. */ }
+    const destination = cartridgeChoice === 1 ? 'ps2' : cartridgeChoice === 2 ? '3ds' : section
     if (window.location.pathname === '/') {
-      history.replaceState(null, '', `/#${section}`)
+      history.replaceState(null, '', `/#${destination}`)
       window.location.reload()
-    } else window.location.assign(`/#${section}`)
+    } else window.location.assign(`/#${destination}`)
   }
   function useControl(control: Control) {
+    if (exitProgress.current > 0) return
     if (control === 'a' || control === 'start') { openPortfolio(sections[selected].id); return }
+    if (control === 'b') { window.scrollTo(0, 0); return }
     if (control === 'select') {
       try { localStorage.setItem('portfolio-theme', localStorage.getItem('portfolio-theme') === 'dark' ? 'light' : 'dark') } catch { /* O menu continua acessível. */ }
     } else {
@@ -506,37 +709,65 @@ export default function Preview3D() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [ready, selected])
-  return <main className="preview-3d">
-    <div className="preview-stage">
+  if (entered) return <PortfolioPlaceholder />
+  return <main className={`preview-3d${entering ? ' preview-3d--entering' : ''}${(cartridgeChoice === 1 && !playStationReady) || (cartridgeChoice === 2 && !threeDSReady) ? ' preview-3d--waiting' : ''}`}>
+    <div className={`preview-stage${cartridgeChoice === 1 ? ' preview-stage--ps2' : cartridgeChoice === 2 ? ' preview-stage--3ds' : ''}`}>
     <button className="preview-skip" onClick={() => openPortfolio()}>Pular intro ↗</button>
-    {sceneReady && <button className="preview-sound" aria-pressed={soundReady} onClick={() => window.dispatchEvent(new Event(soundReady ? 'portfolio-disable-sound' : 'portfolio-enable-sound'))}>{soundReady ? 'Desativar som' : 'Ativar som'} ♪</button>}
-    <SceneError><Canvas dpr={[1, 2]} camera={{ position: [0, 0, 10.8], fov: 30, near: .1, far: 100 }} fallback={<WebGLFallback onReady={setSceneReady} />}>
-      <CameraFit />
+    {experienceReady && <button className="preview-sound" aria-pressed={soundReady} onClick={() => window.dispatchEvent(new Event(soundReady ? 'portfolio-disable-sound' : 'portfolio-enable-sound'))}>{soundReady ? 'Desativar som' : 'Ativar som'} ♪</button>}
+    <SceneError><Canvas dpr={[1, 2]} camera={{ position: [0, 0, 10.8], fov: 30, near: .1, far: 100 }} fallback={<WebGLFallback />}>
+      <CameraFit distanceRef={cameraDistance} />
       <Suspense fallback={null}>
-        <ambientLight intensity={.65} />
-        <directionalLight position={[4, 7, 6]} intensity={1.3} />
+        <ambientLight intensity={cartridgeChoice === 1 ? .45 : .65} />
+        <directionalLight position={[4, 7, 6]} intensity={cartridgeChoice === 1 ? 2.6 : 1.3} />
         <directionalLight position={[-5, 2, 3]} intensity={.45} />
         <Environment resolution={128}><Lightformer intensity={2} position={[0, 4, 5]} scale={[8, 4, 1]} /><Lightformer intensity={1} position={[-5, 0, 3]} scale={[4, 6, 1]} /></Environment>
-        <Console onHover={setHover} onReady={setSceneReady} onIntroReady={setReady} onSoundReady={setSoundReady} onControl={useControl} controlsReady={ready} soundPreference={soundPreference} progress={progress} screenElement={screenElement} />
-        <ContactShadows position={[0, -2.42, 0]} opacity={.35} scale={8} blur={2} far={4} resolution={256} smooth={false} />
+        <Console onHover={setHover} onReady={setSceneReady} onIntroReady={setReady} onSoundReady={setSoundReady} onControl={useControl} controlsReady={ready && cartridgeChoice === 0} cartridgeChoice={cartridgeChoice} onCartridgeChoice={setCartridgeChoice} carouselVisible={carouselVisible} memoryAnchor={memoryAnchor} motionProgress={motionProgress} soundPreference={soundPreference} progress={progress} screenElement={screenElement} cameraDistance={cameraDistance} exitProgress={exitProgress} onEntered={finishEntry} />
+        <PlayStationScene active={cartridgeChoice === 1} progress={motionProgress} cameraDistance={cameraDistance} memoryAnchor={memoryAnchor} onReady={setPlayStationReady} onIntroReady={setReady} exitProgress={exitProgress} onEntered={finishEntry} />
+        <ThreeDSScene active={cartridgeChoice === 2} progress={motionProgress} cameraDistance={cameraDistance} cardAnchor={memoryAnchor} screenElement={threeDSScreen} onReady={setThreeDSReady} onIntroReady={setReady} exitProgress={exitProgress} onEntered={finishEntry} />
+        <ContactShadows position={[0, -2.42, 0]} opacity={.35} scale={8} blur={2} far={4} resolution={128} smooth={false} />
       </Suspense>
-    </Canvas><Loading ready={sceneReady} /></SceneError>
-    {ready && !debug && <div ref={screenElement} className="console-menu" aria-label="Menu do portfólio">
-      <div className="menu-content"><div className="menu-title">LUCIANO ANDRADE FILHO</div><div className="menu-ribbon">PORTFÓLIO</div>
-        <div className="menu-options" role="listbox" aria-label="Escolha uma seção" aria-activedescendant={`menu-${sections[selected].id}`}>
-          {sections.map((section, index) => <button id={`menu-${section.id}`} role="option" aria-selected={selected === index} key={section.id} onFocus={() => { if (selected !== index) window.dispatchEvent(new Event('portfolio-move-sound')); setSelected(index) }} onClick={() => openPortfolio(section.id)}><span aria-hidden="true">{selected === index ? '▶' : '　'}</span> {section.label}</button>)}
+    </Canvas><Loading ready={experienceReady} /></SceneError>
+    {cartridgeChoice === 1 && !playStationReady && <LoadingSkeleton variant="ps2" />}
+    {ready && cartridgeChoice === 1 && !debug && <section className="preview-ps2-menu" aria-label="Sistema AndrdeStation 2">
+      <div className="ps2-system-orbit" aria-hidden="true" />
+      <p className="ps2-system-name">ANDRDESTATION 2</p>
+      <h1>Luciano Andrade Filho</h1>
+      <button className="ps2-save" onClick={() => openPortfolio()}><span className="ps2-save-icon" aria-hidden="true"><i>andrde</i></span><span>ABRIR PORTFÓLIO →</span></button>
+      <button className="ps2-back" onClick={() => useControl('b')}>Voltar ao carrossel</button>
+    </section>}
+    {ready && cartridgeChoice === 2 && !debug && <div ref={threeDSScreen} className="preview-3ds-screen" aria-label="Menu do Andrde EDS">
+      <header><span>ANDRDE EDS</span><span>HOME</span></header>
+      <div className="preview-3ds-library">
+        <button onClick={() => openPortfolio()} aria-label="Abrir portfólio"><img src="/images/rotulo-3ds-novo.webp" alt="" /><span><strong>Portfólio</strong><small>ABRIR　▶</small></span></button>
+      </div>
+      <footer><button onClick={() => useControl('b')} aria-label="Voltar ao carrossel">VOLTAR</button><button onClick={() => openPortfolio()} aria-label="Abrir portfólio">ABRIR　▶</button></footer>
+    </div>}
+    {ready && cartridgeChoice === 2 && !debug && <div className="preview-touch-controls" aria-label="Controles do Andrde EDS"><button onClick={() => openPortfolio()}>ABRIR PORTFÓLIO</button></div>}
+    {ready && cartridgeChoice === 0 && !debug && <div ref={screenElement} className="console-menu" aria-label="Menu do portfólio">
+      <div className="menu-content"><div className="menu-title">LUCIANO ANDRADE FILHO</div>
+        <div className="menu-options">
+          {sections.map((section, index) => <button id={`menu-${section.id}`} key={section.id} onFocus={() => { if (selected !== index) window.dispatchEvent(new Event('portfolio-move-sound')); setSelected(index) }} onClick={() => openPortfolio(section.id)}><span aria-hidden="true">▶</span> {section.label}</button>)}
         </div>
-      </div><div className="menu-prompt">PRESSIONE ENTER OU X</div><span className="menu-live" aria-live="polite">{sections[selected].label}</span>
+      </div><div className="menu-prompt">START / ENTER</div><span className="menu-live" aria-live="polite">{sections[selected].label}</span>
     </div>}
-    {ready && !debug && <div className="preview-touch-controls" aria-label="Controles do menu">
-      <button onClick={() => useControl('up')} aria-label="Opção anterior">◀</button>
+    {ready && cartridgeChoice === 0 && !debug && <div className="preview-touch-controls" aria-label="Controles do menu">
+      <button onClick={() => useControl('b')} aria-label="Voltar ao carrossel">VOLTAR</button>
       <button onClick={() => useControl('a')}>ABRIR</button>
-      <button onClick={() => useControl('down')} aria-label="Próxima opção">▶</button>
     </div>}
-    {ready && !debug && <nav className="preview-landscape-menu" aria-label="Seções do portfólio">
+    {ready && cartridgeChoice === 0 && !debug && <nav className="preview-landscape-menu" aria-label="Seções do portfólio">
       {sections.map((section, index) => <button key={section.id} aria-current={selected === index ? 'true' : undefined} onClick={() => openPortfolio(section.id)}>{section.label}</button>)}
     </nav>}
-    <span className="preview-hint">{ready ? 'SETAS + ENTER · OU TOQUE NA TELA' : 'ROLE PARA INSERIR O CARTUCHO ↓'}</span>
+    {experienceReady && carouselVisible && !debug && <div className={`preview-carousel${reducedMotion ? ' preview-carousel--reduced' : ''}`} role="group" aria-label="Escolher cartucho">
+      <button aria-label="Cartucho anterior" onClick={() => setCartridgeChoice((current) => (current + 2) % 3)}>←</button>
+      <div className="preview-carousel-label" aria-live="polite"><strong>{cartridgeChoice === 0 ? 'GAME BOY' : cartridgeChoice === 1 ? 'ANDRDESTATION 2' : 'ANDRDE EDS'}</strong><span>{reducedMotion ? 'ABRA PARA CONTINUAR' : 'ROLE PARA INSERIR ↓'}</span></div>
+      <button aria-label="Próximo cartucho" onClick={() => setCartridgeChoice((current) => (current + 1) % 3)}>→</button>
+      {reducedMotion && <button className="preview-carousel-open" disabled={!experienceReady} onClick={() => setConfirmed(true)}>ABRIR</button>}
+    </div>}
+    {ready && cartridgeChoice === 0 && <span className="preview-hint">START / ENTER · TOQUE PARA ABRIR · Z PARA VOLTAR</span>}
+    <details className="preview-credits">
+      <summary>Créditos</summary>
+      <p>Modelo 3D <a href="https://skfb.ly/o8DRy">“Nintendo Game Boy (Original 1989)”</a> por Lokeig, sob <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0</a>. Modelo e texturas adaptados.<br /><br /><a href="https://sketchfab.com/3d-models/playstation-2-99d0c0c7f024430ca1c6179a07d85ffa">“PlayStation 2”</a> por Artem P e <a href="https://sketchfab.com/3d-models/high-detail-ps2-memory-card-c856b2e49bb24874b6c3a1a209fa4993">“high detail PS2 Memory card”</a> por btomaek, sob <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Modelos e texturas adaptados.<br /><br /><a href="https://sketchfab.com/3d-models/nintendo-3ds-xl-6cf20040dc0e44559c3e69723945afcc">“Nintendo 3DS XL”</a> por Joshua P. e cartucho de <a href="https://sketchfab.com/3d-models/3ds-handheld-console-ccda52e911194834a9b4002c91de815f">“3DS Handheld Console”</a> por Ryan_Nein, sob <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Modelos e texturas adaptados.</p>
+    </details>
     {debug && <output className="preview-debug">{hover || 'Passe o cursor sobre um material'}</output>}
     </div>
   </main>
